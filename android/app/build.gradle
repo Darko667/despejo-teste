@@ -20,6 +20,7 @@ android {
     // NDK que já vem instalado no GitHub Actions.
     if (System.getenv("ANDROID_NDK_HOME")) {
         ndkPath System.getenv("ANDROID_NDK_HOME")
+        ndkVersion new File(System.getenv("ANDROID_NDK_HOME")).canonicalFile.name
     }
 
     externalNativeBuild {
