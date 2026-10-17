@@ -39,6 +39,10 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
+        <activity
+            android:name=".MapActivity"
+            android:exported="false" />
+
         <service
             android:name=".RecorderService"
             android:exported="false"

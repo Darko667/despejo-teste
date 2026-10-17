@@ -28,6 +28,7 @@ final class Store {
         String text = "";       // texto transcrito, ou o motivo do erro
         boolean sent;           // transcrição já foi para o repositório despejos
         String map = "";        // despejo organizado pelo Claude, quando já voltou
+        String mapJson = "";    // o mesmo mapa em formato de árvore, para desenhar
 
         Rec(String uri, long startedAt, long wallMs, long audioMs) {
             this(uri, startedAt, wallMs, audioMs, false);
@@ -62,6 +63,7 @@ final class Store {
                 r.text = o.optString("text");
                 r.sent = o.optBoolean("sent");
                 r.map = o.optString("map");
+                r.mapJson = o.optString("mapJson");
                 out.add(r);
             }
         } catch (Exception ignored) { }
@@ -89,9 +91,9 @@ final class Store {
         save(c, list);
     }
 
-    static synchronized void setMap(Context c, String uri, String map) {
+    static synchronized void setMap(Context c, String uri, String map, String json) {
         List<Rec> list = all(c);
-        for (Rec r : list) if (r.uri.equals(uri)) r.map = map;
+        for (Rec r : list) if (r.uri.equals(uri)) { r.map = map; r.mapJson = json; }
         save(c, list);
     }
 
@@ -123,7 +125,8 @@ final class Store {
                         .put("tx", r.tx)
                         .put("text", r.text)
                         .put("sent", r.sent)
-                        .put("map", r.map));
+                        .put("map", r.map)
+                        .put("mapJson", r.mapJson));
             }
         } catch (Exception ignored) { }
         prefs(c).edit().putString("lista", a.toString()).commit();

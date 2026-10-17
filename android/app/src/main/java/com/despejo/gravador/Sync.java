@@ -26,6 +26,7 @@ final class Sync {
 
     static final String REPO = "despejos";
     private static final String API = "https://api.github.com";
+    private static final String RAW = "application/vnd.github.raw+json";
 
     private static SharedPreferences prefs(Context c) {
         return c.getSharedPreferences("github", Context.MODE_PRIVATE);
@@ -41,6 +42,10 @@ final class Sync {
 
     static String overallMap(Context c) {
         return prefs(c).getString("mapa", "");
+    }
+
+    static String overallMapJson(Context c) {
+        return prefs(c).getString("mapaJson", "");
     }
 
     /** Confere a chave e se o repositório existe. Devolve null se deu certo, ou o problema em português. */
@@ -89,11 +94,14 @@ final class Sync {
                         r.sent = true;
                     }
                 }
-                if (r.sent && r.map.isEmpty()) {
-                    Resp get = call("GET", base + "organizado/" + baseName(r) + ".md", token, null, "application/vnd.github.raw+json");
+                // Busca enquanto falta o texto ou o desenho (o desenho pode chegar numa rodada depois).
+                if (r.sent && (r.map.isEmpty() || r.mapJson.isEmpty())) {
+                    Resp get = call("GET", base + "organizado/" + baseName(r) + ".md", token, null, RAW);
                     if (get.code == 200 && !get.body.trim().isEmpty()) {
-                        Store.setMap(c, r.uri, get.body);
-                        arrived++;
+                        Resp js = call("GET", base + "organizado/" + baseName(r) + ".json", token, null, RAW);
+                        String json = js.code == 200 ? js.body : "";
+                        if (r.map.isEmpty()) arrived++;
+                        if (r.map.isEmpty() || !json.isEmpty()) Store.setMap(c, r.uri, get.body, json);
                     }
                 }
             } catch (Exception ignored) {
@@ -101,8 +109,10 @@ final class Sync {
             }
         }
         try {
-            Resp mapa = call("GET", base + "mapa.md", token, null, "application/vnd.github.raw+json");
+            Resp mapa = call("GET", base + "mapa.md", token, null, RAW);
             if (mapa.code == 200) prefs(c).edit().putString("mapa", mapa.body).commit();
+            Resp mj = call("GET", base + "mapa.json", token, null, RAW);
+            if (mj.code == 200) prefs(c).edit().putString("mapaJson", mj.body).commit();
         } catch (Exception ignored) { }
         return arrived;
     }

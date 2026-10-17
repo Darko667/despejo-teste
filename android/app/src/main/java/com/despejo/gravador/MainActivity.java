@@ -289,7 +289,8 @@ public class MainActivity extends Activity {
         }
         String overall = Sync.overallMap(this);
         if (!overall.isEmpty()) {
-            Button all = action("Ver mapa geral", OK, v -> showMap("Mapa geral", overall));
+            Button all = action("🧠  Ver mapa geral", OK,
+                    v -> MapActivity.open(this, "Mapa geral", Sync.overallMapJson(this), overall));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(48));
             lp.bottomMargin = dp(12);
             list.addView(all, lp);
@@ -360,7 +361,7 @@ public class MainActivity extends Activity {
             lp.bottomMargin = dp(10);
             card.addView(body, lp);
             if (!r.map.isEmpty()) {
-                Button m = action("Ver mapa organizado", OK, v -> showMap("Despejo organizado", r.map));
+                Button m = action("🧠  Ver mapa", OK, v -> MapActivity.open(this, "Despejo", r.mapJson, r.map));
                 LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, dp(44));
                 bl.setMargins(dp(4), 0, dp(4), dp(10));
                 card.addView(m, bl);
@@ -401,21 +402,6 @@ public class MainActivity extends Activity {
             lp.setMargins(dp(4), 0, dp(4), dp(10));
             card.addView(go, lp);
         }
-    }
-
-    private void showMap(String title, String md) {
-        TextView t = text(md, 15, FG, false);
-        t.setTextIsSelectable(true);
-        t.setLineSpacing(0, 1.15f);
-        t.setPadding(dp(20), dp(12), dp(20), dp(12));
-        ScrollView sv = new ScrollView(this);
-        sv.addView(t);
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(title)
-                .setView(sv)
-                .setPositiveButton("Fechar", null)
-                .setNeutralButton("Copiar", (d, w) -> copy(md))
-                .show();
     }
 
     /** Envia transcrições pendentes e busca mapas novos, sem travar a tela. */
