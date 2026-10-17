@@ -2,6 +2,7 @@ package com.despejo.gravador;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
@@ -18,6 +19,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -48,6 +50,7 @@ public class MainActivity extends Activity {
     private TextView state;
     private TextView error;
     private LinearLayout list;
+    private LinearLayout github;
     private boolean wasRecording;
     private boolean startWhenAllowed;
     private boolean shortcutPending;
@@ -136,6 +139,9 @@ public class MainActivity extends Activity {
         renderButton();
         renderList();
         handler.post(tick);
+        renderGithub();
+        SyncJob.schedule(this);
+        refreshFromGithub();
         // Retoma a fila (ex.: o celular desligou no meio) e já deixa o modelo baixado.
         if (!TranscribeService.running && (Store.nextInQueue(this) != null || !Model.ready(this))) {
             TranscribeService.start(this, true);
@@ -234,6 +240,14 @@ public class MainActivity extends Activity {
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         root.addView(list);
+
+        TextView g = text("ORGANIZAÇÃO AUTOMÁTICA", 13, MUTED, true);
+        g.setLetterSpacing(0.06f);
+        g.setPadding(0, dp(24), 0, dp(10));
+        root.addView(g);
+        github = new LinearLayout(this);
+        github.setOrientation(LinearLayout.VERTICAL);
+        root.addView(github);
         return scroll;
     }
 
@@ -271,6 +285,13 @@ public class MainActivity extends Activity {
         if (recs.isEmpty()) {
             list.addView(text("Nenhuma gravação ainda. Elas ficam salvas em Gravações/Despejo.", 14, MUTED, false));
             return;
+        }
+        String overall = Sync.overallMap(this);
+        if (!overall.isEmpty()) {
+            Button all = action("Ver mapa geral", OK, v -> showMap("Mapa geral", overall));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(48));
+            lp.bottomMargin = dp(12);
+            list.addView(all, lp);
         }
         SimpleDateFormat when = new SimpleDateFormat("dd/MM, HH:mm", new Locale("pt", "BR"));
         for (Store.Rec r : recs) {
@@ -337,6 +358,17 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
             lp.bottomMargin = dp(10);
             card.addView(body, lp);
+            if (!r.map.isEmpty()) {
+                Button m = action("Ver mapa organizado", OK, v -> showMap("Despejo organizado", r.map));
+                LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, dp(44));
+                bl.setMargins(dp(4), 0, dp(4), dp(10));
+                card.addView(m, bl);
+            } else if (Sync.connected(this)) {
+                TextView t = text(r.sent ? "Enviado. O Claude organiza na próxima rodada e o mapa aparece aqui."
+                        : "Esperando internet para enviar para organização.", 14, MUTED, false);
+                t.setPadding(0, 0, 0, dp(10));
+                card.addView(t);
+            }
             return;
         }
         String msg;
@@ -368,6 +400,89 @@ public class MainActivity extends Activity {
             lp.setMargins(dp(4), 0, dp(4), dp(10));
             card.addView(go, lp);
         }
+    }
+
+    private void showMap(String title, String md) {
+        TextView t = text(md, 15, FG, false);
+        t.setTextIsSelectable(true);
+        t.setLineSpacing(0, 1.15f);
+        t.setPadding(dp(20), dp(12), dp(20), dp(12));
+        ScrollView sv = new ScrollView(this);
+        sv.addView(t);
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(title)
+                .setView(sv)
+                .setPositiveButton("Fechar", null)
+                .setNeutralButton("Copiar", (d, w) -> copy(md))
+                .show();
+    }
+
+    /** Envia transcrições pendentes e busca mapas novos, sem travar a tela. */
+    private void refreshFromGithub() {
+        if (!Sync.connected(this)) return;
+        new Thread(() -> {
+            int n = Sync.run(getApplicationContext());
+            runOnUiThread(() -> {
+                if (n > 0) state.setText(n == 1 ? "Chegou um despejo organizado." : n + " despejos organizados chegaram.");
+                renderList();
+            });
+        }).start();
+    }
+
+    /** Onde o Gustavo cola a chave do GitHub uma única vez. */
+    private void renderGithub() {
+        github.removeAllViews();
+        if (Sync.connected(this)) {
+            TextView t = text("Conectado ao GitHub como " + Sync.login(this) + ". Cada transcrição vai para o repositório \""
+                    + Sync.REPO + "\", o Claude organiza e o mapa volta para cá sozinho.", 14, MUTED, false);
+            t.setPadding(0, 0, 0, dp(10));
+            github.addView(t);
+            Button off = action("Desconectar", REC, null);
+            off.setOnClickListener(v -> {
+                if ("1".equals(off.getTag())) { Sync.disconnect(this); renderGithub(); renderList(); }
+                else { off.setTag("1"); off.setText("Toque de novo para desconectar"); }
+            });
+            github.addView(off, new LinearLayout.LayoutParams(-1, dp(44)));
+            return;
+        }
+        TextView t = text("Cole aqui a chave do GitHub (token) que você criou para o repositório \"" + Sync.REPO
+                + "\". Ela fica guardada só neste celular.", 14, MUTED, false);
+        t.setPadding(0, 0, 0, dp(10));
+        github.addView(t);
+        EditText in = new EditText(this);
+        in.setHint("github_pat_…");
+        in.setHintTextColor(MUTED);
+        in.setTextColor(FG);
+        in.setSingleLine(true);
+        in.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        in.setPadding(dp(12), dp(10), dp(12), dp(10));
+        in.setBackground(box(SURFACE, LINE, 8));
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(-1, -2);
+        ilp.bottomMargin = dp(10);
+        github.addView(in, ilp);
+        Button go = action("Conectar", OK, null);
+        go.setOnClickListener(v -> {
+            String token = in.getText().toString();
+            if (token.trim().isEmpty()) return;
+            go.setEnabled(false);
+            go.setText("Conferindo…");
+            new Thread(() -> {
+                String problem = Sync.connect(getApplicationContext(), token);
+                runOnUiThread(() -> {
+                    if (problem != null) {
+                        Store.lastError = problem;
+                        go.setEnabled(true);
+                        go.setText("Conectar");
+                    } else {
+                        Store.lastError = null;
+                        state.setText("GitHub conectado.");
+                        renderGithub();
+                        refreshFromGithub();
+                    }
+                });
+            }).start();
+        });
+        github.addView(go, new LinearLayout.LayoutParams(-1, dp(44)));
     }
 
     private void copy(String s) {

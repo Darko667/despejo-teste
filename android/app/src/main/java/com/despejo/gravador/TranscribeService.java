@@ -119,7 +119,15 @@ public class TranscribeService extends Service {
             if (ctx != 0) Whisper.nFree(ctx);
             currentUri = null;
             status = null;
-            if (done > 0) notifyDone(done, lastText);
+            if (done > 0) {
+                notifyDone(done, lastText);
+                if (Sync.connected(this)) {
+                    status = "Enviando para organizar…";
+                    showProgress(status, -1);
+                    Sync.run(this);
+                    status = null;
+                }
+            }
             main.post(this::afterWork);
         }
     }

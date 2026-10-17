@@ -26,6 +26,8 @@ final class Store {
         final boolean shared;   // veio pelo "Compartilhar" de outro app
         String tx = "";         // transcrição: "" (não pedida), FILA, OK ou ERRO
         String text = "";       // texto transcrito, ou o motivo do erro
+        boolean sent;           // transcrição já foi para o repositório despejos
+        String map = "";        // despejo organizado pelo Claude, quando já voltou
 
         Rec(String uri, long startedAt, long wallMs, long audioMs) {
             this(uri, startedAt, wallMs, audioMs, false);
@@ -58,6 +60,8 @@ final class Store {
                 Rec r = new Rec(o.getString("uri"), o.getLong("startedAt"), o.getLong("wallMs"), o.getLong("audioMs"), o.optBoolean("shared"));
                 r.tx = o.optString("tx");
                 r.text = o.optString("text");
+                r.sent = o.optBoolean("sent");
+                r.map = o.optString("map");
                 out.add(r);
             }
         } catch (Exception ignored) { }
@@ -76,6 +80,18 @@ final class Store {
         for (Rec r : list) {
             if (r.uri.equals(uri)) { r.tx = tx; r.text = text; }
         }
+        save(c, list);
+    }
+
+    static synchronized void setSent(Context c, String uri) {
+        List<Rec> list = all(c);
+        for (Rec r : list) if (r.uri.equals(uri)) r.sent = true;
+        save(c, list);
+    }
+
+    static synchronized void setMap(Context c, String uri, String map) {
+        List<Rec> list = all(c);
+        for (Rec r : list) if (r.uri.equals(uri)) r.map = map;
         save(c, list);
     }
 
@@ -105,7 +121,9 @@ final class Store {
                         .put("audioMs", r.audioMs)
                         .put("shared", r.shared)
                         .put("tx", r.tx)
-                        .put("text", r.text));
+                        .put("text", r.text)
+                        .put("sent", r.sent)
+                        .put("map", r.map));
             }
         } catch (Exception ignored) { }
         prefs(c).edit().putString("lista", a.toString()).commit();
