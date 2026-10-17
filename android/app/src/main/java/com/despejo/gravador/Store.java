@@ -19,12 +19,18 @@ final class Store {
         final long startedAt;
         final long wallMs;
         final long audioMs;
+        final boolean shared;   // veio pelo "Compartilhar" de outro app
 
         Rec(String uri, long startedAt, long wallMs, long audioMs) {
+            this(uri, startedAt, wallMs, audioMs, false);
+        }
+
+        Rec(String uri, long startedAt, long wallMs, long audioMs, boolean shared) {
             this.uri = uri;
             this.startedAt = startedAt;
             this.wallMs = wallMs;
             this.audioMs = audioMs;
+            this.shared = shared;
         }
 
         /** Passou se o arquivo tem praticamente a mesma duração do tempo que ficou gravando. */
@@ -43,7 +49,7 @@ final class Store {
             JSONArray a = new JSONArray(prefs(c).getString("lista", "[]"));
             for (int i = 0; i < a.length(); i++) {
                 JSONObject o = a.getJSONObject(i);
-                out.add(new Rec(o.getString("uri"), o.getLong("startedAt"), o.getLong("wallMs"), o.getLong("audioMs")));
+                out.add(new Rec(o.getString("uri"), o.getLong("startedAt"), o.getLong("wallMs"), o.getLong("audioMs"), o.optBoolean("shared")));
             }
         } catch (Exception ignored) { }
         return out;
@@ -69,7 +75,8 @@ final class Store {
                         .put("uri", r.uri)
                         .put("startedAt", r.startedAt)
                         .put("wallMs", r.wallMs)
-                        .put("audioMs", r.audioMs));
+                        .put("audioMs", r.audioMs)
+                        .put("shared", r.shared));
             }
         } catch (Exception ignored) { }
         prefs(c).edit().putString("lista", a.toString()).apply();

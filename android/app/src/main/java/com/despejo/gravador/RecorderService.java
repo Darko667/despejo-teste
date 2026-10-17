@@ -128,7 +128,7 @@ public class RecorderService extends Service {
         v.put(MediaStore.Audio.Media.IS_PENDING, 0);
         getContentResolver().update(uri, v, null, null);
 
-        long audioMs = readDuration(uri);
+        long audioMs = readDuration(this, uri);
         Store.add(this, new Store.Rec(uri.toString(), startedAt, wallMs, audioMs));
         uri = null;
     }
@@ -141,10 +141,10 @@ public class RecorderService extends Service {
         if (uri != null) { getContentResolver().delete(uri, null, null); uri = null; }
     }
 
-    private long readDuration(Uri u) {
+    static long readDuration(Context c, Uri u) {
         MediaMetadataRetriever r = new MediaMetadataRetriever();
         try {
-            r.setDataSource(this, u);
+            r.setDataSource(c, u);
             String d = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
             return d != null ? Long.parseLong(d) : -1;
         } catch (Exception e) {

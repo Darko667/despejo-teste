@@ -21,6 +21,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -83,7 +84,35 @@ public class MainActivity extends Activity {
 
     /** O atalho "Gravar agora" (segurar o ícone) já começa a gravar. */
     private void handleIntent(Intent intent) {
-        if (intent != null && ACTION_GRAVAR.equals(intent.getAction())) shortcutPending = true;
+        if (intent == null) return;
+        String action = intent.getAction();
+        if (ACTION_GRAVAR.equals(action)) shortcutPending = true;
+        else if (Intent.ACTION_SEND.equals(action) || Intent.ACTION_SEND_MULTIPLE.equals(action)) receiveShared(intent);
+    }
+
+    /** Áudio enviado de outro app (ex.: Gravador da Samsung) pelo menu Compartilhar. */
+    private void receiveShared(Intent intent) {
+        List<Uri> uris = new ArrayList<>();
+        if (Intent.ACTION_SEND.equals(intent.getAction())) {
+            Uri u = (Uri) intent.getParcelableExtra(Intent.EXTRA_STREAM);
+            if (u != null) uris.add(u);
+        } else {
+            ArrayList<Uri> many = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+            if (many != null) uris.addAll(many);
+        }
+        setIntent(new Intent(this, MainActivity.class));   // não importar de novo ao girar a tela
+        if (uris.isEmpty()) {
+            Store.lastError = "O compartilhar abriu o Despejo, mas não veio nenhum áudio.";
+            return;
+        }
+        state.setText("Recebendo áudio…");
+        new Thread(() -> {
+            int n = Importer.importAll(getApplicationContext(), uris);
+            runOnUiThread(() -> {
+                state.setText(n == 1 ? "Áudio recebido." : n + " áudios recebidos.");
+                renderList();
+            });
+        }).start();
     }
 
     @Override
@@ -236,16 +265,19 @@ public class MainActivity extends Activity {
             top.setGravity(Gravity.CENTER_VERTICAL);
             TextView t = text(when.format(new Date(r.startedAt)), 16, FG, true);
             top.addView(t, new LinearLayout.LayoutParams(0, -2, 1));
-            boolean ok = r.passed();
-            TextView pill = text(ok ? "Passou" : "Cortou", 13, ok ? OK : REC, true);
+            boolean ok = r.shared || r.passed();
+            TextView pill = text(r.shared ? "Recebido" : ok ? "Passou" : "Cortou", 13, ok ? OK : REC, true);
             pill.setPadding(dp(10), dp(2), dp(10), dp(2));
             pill.setBackground(box(ok ? Color.argb(50, 62, 207, 142) : Color.argb(50, 255, 77, 77), Color.TRANSPARENT, 99));
             top.addView(pill);
             card.addView(top);
 
             long lost = Math.max(0, r.wallMs - Math.max(0, r.audioMs));
-            TextView facts = text("Tempo total " + fmt(r.wallMs) + " · áudio salvo "
-                    + (r.audioMs >= 0 ? fmt(r.audioMs) : "?") + " · perdido " + fmt(lost), 14, MUTED, false);
+            String info = r.shared
+                    ? "Veio de outro app · duração " + (r.audioMs >= 0 ? fmt(r.audioMs) : "?")
+                    : "Tempo total " + fmt(r.wallMs) + " · áudio salvo "
+                      + (r.audioMs >= 0 ? fmt(r.audioMs) : "?") + " · perdido " + fmt(lost);
+            TextView facts = text(info, 14, MUTED, false);
             facts.setPadding(0, dp(6), 0, dp(10));
             card.addView(facts);
 
