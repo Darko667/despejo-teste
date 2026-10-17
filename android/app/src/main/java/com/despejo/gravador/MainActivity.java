@@ -86,6 +86,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        installCrashCatcher();
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         setContentView(buildUi());
@@ -504,6 +505,24 @@ public class MainActivity extends Activity {
                 .putExtra(Intent.EXTRA_STREAM, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         startActivity(Intent.createChooser(send, "Enviar gravação"));
+    }
+
+    /** Se o app fechar sozinho, guarda o motivo e mostra na próxima vez que abrir. */
+    private void installCrashCatcher() {
+        android.content.SharedPreferences p = getSharedPreferences("falha", MODE_PRIVATE);
+        String last = p.getString("ultima", null);
+        if (last != null) {
+            Store.lastError = "O app fechou sozinho da última vez. Me mande um print disto:\n" + last;
+            p.edit().remove("ultima").commit();
+        }
+        Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            java.io.StringWriter sw = new java.io.StringWriter();
+            e.printStackTrace(new java.io.PrintWriter(sw));
+            String trace = sw.toString();
+            p.edit().putString("ultima", "v" + BuildConfig.VERSION_NAME + " " + trace.substring(0, Math.min(1500, trace.length()))).commit();
+            if (prev != null) prev.uncaughtException(t, e);
+        });
     }
 
     // ---------- Utilidades ----------

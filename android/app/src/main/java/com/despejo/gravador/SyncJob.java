@@ -19,13 +19,18 @@ public class SyncJob extends JobService {
     private static final String CHANNEL = "organizado";
 
     static void schedule(Context c) {
-        JobScheduler js = c.getSystemService(JobScheduler.class);
-        if (js.getPendingJob(JOB_ID) != null) return;
-        js.schedule(new JobInfo.Builder(JOB_ID, new ComponentName(c, SyncJob.class))
+        try {
+            JobScheduler js = c.getSystemService(JobScheduler.class);
+            if (js.getPendingJob(JOB_ID) != null) return;
+            js.schedule(new JobInfo.Builder(JOB_ID, new ComponentName(c, SyncJob.class))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                 .setPeriodic(30 * 60 * 1000L)
                 .setPersisted(true)
                 .build());
+        } catch (Exception e) {
+            // Sem o agendamento, a busca ainda acontece toda vez que o app abre.
+            Store.lastError = "Não consegui agendar a busca automática dos mapas: " + e.getMessage();
+        }
     }
 
     @Override
@@ -54,5 +59,9 @@ public class SyncJob extends JobService {
                 .setContentIntent(open)
                 .setAutoCancel(true)
                 .build());
+        } catch (Exception e) {
+            // Sem o agendamento, a busca ainda acontece toda vez que o app abre.
+            Store.lastError = "Não consegui agendar a busca automática dos mapas: " + e.getMessage();
+        }
     }
 }
