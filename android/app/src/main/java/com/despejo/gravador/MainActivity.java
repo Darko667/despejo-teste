@@ -2,6 +2,8 @@ package com.despejo.gravador;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -49,6 +51,9 @@ public class MainActivity extends Activity {
     private boolean wasRecording;
     private boolean startWhenAllowed;
     private boolean shortcutPending;
+    private boolean wasTranscribing;
+    private String shownCurrent;
+    private TextView currentStatus;   // linha de progresso do card que está sendo transcrito
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -59,6 +64,14 @@ public class MainActivity extends Activity {
                 wasRecording = rec;
                 renderButton();
                 renderList();
+            }
+            boolean tr = TranscribeService.running;
+            String cur = TranscribeService.currentUri;
+            if (tr != wasTranscribing || !java.util.Objects.equals(cur, shownCurrent)) {
+                wasTranscribing = tr;
+                renderList();
+            } else if (currentStatus != null && TranscribeService.status != null) {
+                currentStatus.setText(TranscribeService.status);
             }
             String err = Store.lastError;
             error.setVisibility(err == null ? View.GONE : View.VISIBLE);
@@ -108,6 +121,7 @@ public class MainActivity extends Activity {
         state.setText("Recebendo áudio…");
         new Thread(() -> {
             int n = Importer.importAll(getApplicationContext(), uris);
+            if (n > 0) TranscribeService.start(getApplicationContext());
             runOnUiThread(() -> {
                 state.setText(n == 1 ? "Áudio recebido." : n + " áudios recebidos.");
                 renderList();
@@ -122,6 +136,10 @@ public class MainActivity extends Activity {
         renderButton();
         renderList();
         handler.post(tick);
+        // Retoma a fila (ex.: o celular desligou no meio) e já deixa o modelo baixado.
+        if (!TranscribeService.running && (Store.nextInQueue(this) != null || !Model.ready(this))) {
+            TranscribeService.start(this, true);
+        }
         // Começa só com a tela já visível: o Android exige isso para usar o microfone.
         if (shortcutPending) {
             shortcutPending = false;
@@ -176,7 +194,7 @@ public class MainActivity extends Activity {
 
         TextView title = text("Despejo", 22, FG, true);
         root.addView(title);
-        TextView hint = text("Toque, fale e pode bloquear a tela. A gravação continua.", 15, MUTED, false);
+        TextView hint = text("Toque, fale e pode bloquear a tela. Quando parar, o texto aparece aqui sozinho.", 15, MUTED, false);
         hint.setPadding(0, dp(4), 0, dp(24));
         root.addView(hint);
 
@@ -247,6 +265,8 @@ public class MainActivity extends Activity {
 
     private void renderList() {
         list.removeAllViews();
+        currentStatus = null;
+        shownCurrent = TranscribeService.currentUri;
         List<Store.Rec> recs = Store.all(this);
         if (recs.isEmpty()) {
             list.addView(text("Nenhuma gravação ainda. Elas ficam salvas em Gravações/Despejo.", 14, MUTED, false));
@@ -280,11 +300,13 @@ public class MainActivity extends Activity {
             TextView facts = text(info, 14, MUTED, false);
             facts.setPadding(0, dp(6), 0, dp(10));
             card.addView(facts);
+            addTranscript(card, r);
 
             LinearLayout actions = new LinearLayout(this);
             Uri uri = Uri.parse(r.uri);
             actions.addView(action("Ouvir", FG, v -> open(uri)), weight());
             actions.addView(action("Enviar", FG, v -> share(uri)), weight());
+            if (Store.OK.equals(r.tx)) actions.addView(action("Copiar", OK, v -> copy(r.text)), weight());
             Button del = action("Apagar", REC, null);
             del.setOnClickListener(v -> {
                 if ("1".equals(del.getTag())) {
@@ -300,6 +322,57 @@ public class MainActivity extends Activity {
             card.addView(actions);
             list.addView(card, lp);
         }
+    }
+
+    /** Mostra o texto transcrito, ou em que pé está a transcrição. */
+    private void addTranscript(LinearLayout card, Store.Rec r) {
+        if (Store.OK.equals(r.tx)) {
+            TextView body = text(r.text, 15, FG, false);
+            body.setLineSpacing(0, 1.15f);
+            body.setMaxLines(6);
+            body.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            body.setPadding(dp(12), dp(10), dp(12), dp(10));
+            body.setBackground(box(BG, LINE, 8));
+            body.setOnClickListener(v -> body.setMaxLines(body.getMaxLines() == 6 ? Integer.MAX_VALUE : 6));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.bottomMargin = dp(10);
+            card.addView(body, lp);
+            return;
+        }
+        String msg;
+        int color = MUTED;
+        boolean button = false;
+        if (Store.FILA.equals(r.tx)) {
+            boolean now = r.uri.equals(TranscribeService.currentUri);
+            msg = now && TranscribeService.status != null ? TranscribeService.status
+                    : now ? "Transcrevendo…" : "Na fila para transcrever";
+        } else if (Store.ERRO.equals(r.tx)) {
+            msg = r.text;
+            color = REC;
+            button = true;
+        } else {
+            msg = "Ainda não transcrito";
+            button = true;
+        }
+        TextView t = text(msg, 14, color, false);
+        t.setPadding(0, 0, 0, dp(10));
+        card.addView(t);
+        if (Store.FILA.equals(r.tx) && r.uri.equals(TranscribeService.currentUri)) currentStatus = t;
+        if (button) {
+            Button go = action(Store.ERRO.equals(r.tx) ? "Tentar de novo" : "Transcrever", FG, v -> {
+                Store.setTranscript(this, r.uri, Store.FILA, "");
+                TranscribeService.start(this);
+                renderList();
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(44));
+            lp.setMargins(dp(4), 0, dp(4), dp(10));
+            card.addView(go, lp);
+        }
+    }
+
+    private void copy(String s) {
+        getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Despejo", s));
+        state.setText("Texto copiado.");
     }
 
     private void open(Uri uri) {

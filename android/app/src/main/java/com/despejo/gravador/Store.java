@@ -14,12 +14,18 @@ final class Store {
 
     static volatile String lastError;
 
+    static final String FILA = "fila";
+    static final String OK = "ok";
+    static final String ERRO = "erro";
+
     static final class Rec {
         final String uri;
         final long startedAt;
         final long wallMs;
         final long audioMs;
         final boolean shared;   // veio pelo "Compartilhar" de outro app
+        String tx = "";         // transcrição: "" (não pedida), FILA, OK ou ERRO
+        String text = "";       // texto transcrito, ou o motivo do erro
 
         Rec(String uri, long startedAt, long wallMs, long audioMs) {
             this(uri, startedAt, wallMs, audioMs, false);
@@ -49,7 +55,10 @@ final class Store {
             JSONArray a = new JSONArray(prefs(c).getString("lista", "[]"));
             for (int i = 0; i < a.length(); i++) {
                 JSONObject o = a.getJSONObject(i);
-                out.add(new Rec(o.getString("uri"), o.getLong("startedAt"), o.getLong("wallMs"), o.getLong("audioMs"), o.optBoolean("shared")));
+                Rec r = new Rec(o.getString("uri"), o.getLong("startedAt"), o.getLong("wallMs"), o.getLong("audioMs"), o.optBoolean("shared"));
+                r.tx = o.optString("tx");
+                r.text = o.optString("text");
+                out.add(r);
             }
         } catch (Exception ignored) { }
         return out;
@@ -59,6 +68,24 @@ final class Store {
         List<Rec> list = all(c);
         list.add(0, r);
         save(c, list);
+    }
+
+    /** Muda o estado da transcrição de uma gravação. */
+    static synchronized void setTranscript(Context c, String uri, String tx, String text) {
+        List<Rec> list = all(c);
+        for (Rec r : list) {
+            if (r.uri.equals(uri)) { r.tx = tx; r.text = text; }
+        }
+        save(c, list);
+    }
+
+    /** A gravação mais antiga esperando transcrição, ou null. */
+    static synchronized Rec nextInQueue(Context c) {
+        List<Rec> list = all(c);
+        for (int i = list.size() - 1; i >= 0; i--) {
+            if (FILA.equals(list.get(i).tx)) return list.get(i);
+        }
+        return null;
     }
 
     static synchronized void remove(Context c, String uri) {
@@ -76,10 +103,12 @@ final class Store {
                         .put("startedAt", r.startedAt)
                         .put("wallMs", r.wallMs)
                         .put("audioMs", r.audioMs)
-                        .put("shared", r.shared));
+                        .put("shared", r.shared)
+                        .put("tx", r.tx)
+                        .put("text", r.text));
             }
         } catch (Exception ignored) { }
-        prefs(c).edit().putString("lista", a.toString()).apply();
+        prefs(c).edit().putString("lista", a.toString()).commit();
     }
 
     private Store() { }

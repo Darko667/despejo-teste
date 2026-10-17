@@ -129,8 +129,11 @@ public class RecorderService extends Service {
         getContentResolver().update(uri, v, null, null);
 
         long audioMs = readDuration(this, uri);
-        Store.add(this, new Store.Rec(uri.toString(), startedAt, wallMs, audioMs));
+        Store.Rec r = new Store.Rec(uri.toString(), startedAt, wallMs, audioMs);
+        r.tx = Store.FILA;
+        Store.add(this, r);
         uri = null;
+        TranscribeService.start(this);
     }
 
     private void cleanupAfterFailure() {

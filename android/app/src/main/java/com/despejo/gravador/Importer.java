@@ -65,7 +65,9 @@ final class Importer {
         cr.update(dst, done, null, null);
 
         long ms = RecorderService.readDuration(c, dst);
-        Store.add(c, new Store.Rec(dst.toString(), System.currentTimeMillis(), Math.max(ms, 0), ms, true));
+        Store.Rec r = new Store.Rec(dst.toString(), System.currentTimeMillis(), Math.max(ms, 0), ms, true);
+        r.tx = Store.FILA;
+        Store.add(c, r);
     }
 
     private static String displayName(ContentResolver cr, Uri u) {
