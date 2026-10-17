@@ -59,9 +59,5 @@ public class SyncJob extends JobService {
                 .setContentIntent(open)
                 .setAutoCancel(true)
                 .build());
-        } catch (Exception e) {
-            // Sem o agendamento, a busca ainda acontece toda vez que o app abre.
-            Store.lastError = "Não consegui agendar a busca automática dos mapas: " + e.getMessage();
-        }
     }
 }
