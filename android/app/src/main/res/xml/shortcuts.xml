@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="gravar"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/gravar">
+        <intent
+            android:action="com.despejo.gravador.GRAVAR"
+            android:targetPackage="com.despejo.gravador"
+            android:targetClass="com.despejo.gravador.MainActivity" />
+    </shortcut>
+</shortcuts>

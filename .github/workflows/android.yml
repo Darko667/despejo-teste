@@ -1,0 +1,41 @@
+name: App Android
+
+on:
+  push:
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Gerar APK
+        working-directory: android
+        run: gradle --no-daemon assembleDebug
+
+      - name: Publicar APK numa release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk despejo.apk
+          gh release create "app-${{ github.run_number }}" despejo.apk \
+            --target "${{ github.sha }}" \
+            --title "Despejo (teste) #${{ github.run_number }}" \
+            --notes "APK de teste gerado de ${{ github.ref_name }} (${{ github.sha }})." \
+            --latest
